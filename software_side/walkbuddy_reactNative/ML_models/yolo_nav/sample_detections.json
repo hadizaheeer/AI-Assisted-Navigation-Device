@@ -1,0 +1,50 @@
+{
+  "timestamp": "2025-11-29T14:30:00.123456789Z",
+  "frame_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "source": "yolov8s_indoor_v1_trained",
+  "detections": [
+    {
+      "id": 0,
+      "label": "office-chair",
+      "confidence": 0.82,
+      "bbox_norm": {
+        "cx": 0.53,
+        "cy": 0.61,
+        "w": 0.24,
+        "h": 0.35
+      },
+      "severity": "near",
+      "side": "left",
+      "distance_m": null
+    },
+    {
+      "id": 1,
+      "label": "monitor",
+      "confidence": 0.75,
+      "bbox_norm": {
+        "cx": 0.72,
+        "cy": 0.45,
+        "w": 0.18,
+        "h": 0.22
+      },
+      "severity": "mid",
+      "side": "right",
+      "distance_m": null
+    },
+    {
+      "id": 2,
+      "label": "books",
+      "confidence": 0.68,
+      "bbox_norm": {
+        "cx": 0.35,
+        "cy": 0.55,
+        "w": 0.15,
+        "h": 0.28
+      },
+      "severity": "far",
+      "side": "left",
+      "distance_m": null
+    }
+  ]
+}
+
