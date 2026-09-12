@@ -64,6 +64,8 @@ import {
   snapToRoute,
   calculateRemainingDistance,
 } from "../../src/utils/navigationHelpers";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 import { Radius, Typography } from "@/constants/theme";
 import { useThemeColors } from "@/hooks/use-theme-colors";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -72,12 +74,27 @@ const { height: SCREEN_H } = Dimensions.get("window");
 
 const MILESTONES = [200, 100, 50];
 
+// Compact by default so the instruction card and Destination/Start buttons
+// are visible without scrolling; MAP_HEIGHT_EXPANDED (roughly the old
+// fixed 55% height) is available via the maximise toggle for a bigger view.
+const MAP_HEIGHT_COLLAPSED = SCREEN_H * 0.28;
+const MAP_HEIGHT_EXPANDED = SCREEN_H * 0.55;
+
+// Footer's own content height (marginTop/paddingVertical/icon row/marginBottom
+// from app/Footer.tsx's bottomBar, excluding its safe-area padding, which is
+// added separately below via insets.bottom) — kept as a named constant here
+// since Footer doesn't export its height.
+const FOOTER_CONTENT_HEIGHT = 97;
+
 export default function ExteriorNavigationScreen() {
   const colors = useThemeColors();
   const params = useLocalSearchParams<{ presetDestination?: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const footerClearance = FOOTER_CONTENT_HEIGHT + insets.bottom;
   const [isNavigating, setIsNavigating] = useState(false);
   const [showDestinationModal, setShowDestinationModal] = useState(false);
+  const [isMapExpanded, setIsMapExpanded] = useState(false);
   const [settings, setSettings] = useState<NavigationSettings>({
     showMapVisuals: true,
     voiceEnabled: true,
@@ -815,7 +832,12 @@ export default function ExteriorNavigationScreen() {
         }
       />
 
-      <View style={[styles.previewBox, { backgroundColor: colors.background }]}>
+      <View
+        style={[
+          styles.previewBox,
+          { height: isMapExpanded ? MAP_HEIGHT_EXPANDED : MAP_HEIGHT_COLLAPSED, backgroundColor: colors.background },
+        ]}
+      >
         <View style={styles.mapInner}>
           <MapPanel
             currentLocation={currentLocation || undefined}
@@ -825,6 +847,17 @@ export default function ExteriorNavigationScreen() {
             showMap={settings.showMapVisuals}
           />
         </View>
+        <Pressable
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setIsMapExpanded((prev) => !prev);
+          }}
+          style={[styles.mapToggleBtn, { backgroundColor: colors.surfaceElevated, borderColor: colors.accent + "80" }]}
+          accessibilityRole="button"
+          accessibilityLabel={isMapExpanded ? "Minimise map" : "Maximise map"}
+        >
+          <MaterialIcons name={isMapExpanded ? "fullscreen-exit" : "fullscreen"} size={22} color={colors.accent} />
+        </Pressable>
       </View>
 
       {/* ─── Modernised Route Planning Modal ─── */}
@@ -1031,6 +1064,11 @@ export default function ExteriorNavigationScreen() {
         </View>
       </Modal>
 
+      <ScrollView
+        style={[styles.scrollBody, { marginBottom: footerClearance }]}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
       {/* Instruction Card */}
       {isNavigating && currentStep ? (
         <View style={[styles.instructionCard, { backgroundColor: colors.surface, borderColor: colors.accent }]}>
@@ -1087,7 +1125,7 @@ export default function ExteriorNavigationScreen() {
               }}
             >
               <MaterialIcons name="place" size={24} color={colors.accent} />
-              <Text style={[styles.destinationBtnText, { color: colors.accent }]}>DESTINATION</Text>
+              <Text style={[styles.destinationBtnText, { color: colors.accent }]} numberOfLines={1} adjustsFontSizeToFit>DESTINATION</Text>
             </Pressable>
             <Pressable
               style={[styles.controlBtn, styles.startBtn, { backgroundColor: colors.accent, shadowColor: colors.accent }]}
@@ -1098,11 +1136,11 @@ export default function ExteriorNavigationScreen() {
               disabled={isLoadingRoute || !destination}
             >
               {isLoadingRoute ? (
-                <Text style={[styles.startBtnText, { color: colors.accentText }]}>Loading...</Text>
+                <Text style={[styles.startBtnText, { color: colors.accentText }]} numberOfLines={1} adjustsFontSizeToFit>Loading...</Text>
               ) : (
                 <>
                   <MaterialIcons name="play-arrow" size={32} color={colors.accentText} />
-                  <Text style={[styles.startBtnText, { color: colors.accentText }]}>START</Text>
+                  <Text style={[styles.startBtnText, { color: colors.accentText }]} numberOfLines={1} adjustsFontSizeToFit>START</Text>
                 </>
               )}
             </Pressable>
@@ -1123,10 +1161,11 @@ export default function ExteriorNavigationScreen() {
             }}
           >
             <MaterialIcons name="stop" size={32} color={colors.accent} />
-            <Text style={[styles.stopBtnText, { color: colors.accent }]}>STOP</Text>
+            <Text style={[styles.stopBtnText, { color: colors.accent }]} numberOfLines={1} adjustsFontSizeToFit>STOP</Text>
           </Pressable>
         )}
       </View>
+      </ScrollView>
     </View>
   );
 }
@@ -1137,6 +1176,16 @@ export default function ExteriorNavigationScreen() {
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
 
+  // marginBottom (set inline, see footerClearance) shrinks the ScrollView's
+  // own visible viewport so its content stops above the footer's floating
+  // pill — a bottom padding on the *content* wouldn't do this, since it
+  // only adds scrollable space after the last item instead of moving that
+  // item's resting position.
+  scrollBody: { flex: 1 },
+  scrollContent: {
+    paddingBottom: 12,
+  },
+
   headerEditBtn: {
     width: 40, height: 40, borderRadius: Radius.md,
     alignItems: "center", justifyContent: "center",
@@ -1146,10 +1195,26 @@ const styles = StyleSheet.create({
 
   mapInner: { flex: 1, width: "100%", height: "100%" },
   previewBox: {
-    height: SCREEN_H * 0.55,
+    // height set inline (isMapExpanded ? MAP_HEIGHT_EXPANDED : MAP_HEIGHT_COLLAPSED)
     margin: 12,
     borderRadius: 10,
     overflow: "hidden",
+  },
+  mapToggleBtn: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
   },
 
   instructionCard: {
@@ -1181,13 +1246,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 18,
+    // Horizontal breathing room from the pill's fully-rounded (borderRadius:
+    // Radius.pill) edges — without this, longer labels like "DESTINATION"
+    // render flush to the curved border and visually cross it.
+    paddingHorizontal: 14,
     borderRadius: Radius.pill,
     gap: 8,
     flex: 1
   },
 
   startBtn: {
-    flex: 2,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
     shadowRadius: 16,

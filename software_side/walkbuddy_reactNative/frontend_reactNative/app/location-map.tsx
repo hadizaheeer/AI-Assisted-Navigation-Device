@@ -4,6 +4,7 @@ import { WebView } from "react-native-webview";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Location from "expo-location";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCurrentLocation } from "../src/utils/locationSaver";
 import { useThemeColors } from "@/hooks/use-theme-colors";
 
@@ -34,7 +35,11 @@ type MapColors = {
 // Note: this HTML is rendered inside a WebView/iframe (a separate document,
 // not part of the React tree), so it can't use useThemeColors() reactively —
 // the current palette is threaded in as plain strings at generation time.
-function generateMapHTML(lat: number, lng: number, label: string, value: string, colors: MapColors) {
+// topInset is threaded in the same way: the WebView fills the whole screen
+// edge-to-edge, so Leaflet's own zoom control (which the native safe-area
+// insets can't reach, since it lives inside this separate HTML document)
+// needs the device's safe-area top inset applied here in CSS instead.
+function generateMapHTML(lat: number, lng: number, label: string, value: string, colors: MapColors, topInset: number) {
   const safeLabel = (label || "LOCATION").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const safeValue = (value || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
@@ -48,6 +53,13 @@ function generateMapHTML(lat: number, lng: number, label: string, value: string,
   <style>
     html, body { height: 100%; margin: 0; }
     #map { width: 100%; height: 100%; }
+    /* Push Leaflet's default zoom control down past the status bar/notch/
+       Dynamic Island and slightly in from the left edge, instead of its
+       default top:10px/left:10px (flush to the screen's true top-left). */
+    .leaflet-top.leaflet-left {
+      top: ${topInset + 12}px;
+      left: 14px;
+    }
     .badge {
       position: absolute;
       left: 12px;
@@ -108,6 +120,7 @@ function generateMapHTML(lat: number, lng: number, label: string, value: string,
 
 export default function LocationMapScreen() {
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<Params>();
 
@@ -158,7 +171,7 @@ export default function LocationMapScreen() {
       return;
     }
 
-    const html = generateMapHTML(finalLat, finalLng, derivedLabel, derivedValue, colors);
+    const html = generateMapHTML(finalLat, finalLng, derivedLabel, derivedValue, colors, insets.top);
 
     containerRef.current.innerHTML = "";
     const iframe = document.createElement("iframe");
@@ -171,7 +184,7 @@ export default function LocationMapScreen() {
     containerRef.current.appendChild(iframe);
 
     setWebReady(true);
-  }, [finalLat, finalLng, derivedLabel, derivedValue, colors]);
+  }, [finalLat, finalLng, derivedLabel, derivedValue, colors, insets.top]);
 
   const handleClose = () => {
     router.back();
@@ -189,7 +202,7 @@ export default function LocationMapScreen() {
         ) : coordsReady ? (
           <WebView
             style={{ flex: 1 }}
-            source={{ html: generateMapHTML(finalLat!, finalLng!, derivedLabel, derivedValue, colors) }}
+            source={{ html: generateMapHTML(finalLat!, finalLng!, derivedLabel, derivedValue, colors, insets.top) }}
             originWhitelist={["*"]}
             javaScriptEnabled
           />
@@ -201,7 +214,8 @@ export default function LocationMapScreen() {
 
         <Pressable
           onPress={handleClose}
-          style={[styles.closeBtn, { backgroundColor: colors.accent }]}
+          style={[styles.closeBtn, { top: insets.top + 12, right: 20, backgroundColor: colors.accent }]}
+          accessibilityRole="button"
           accessibilityLabel="Close map"
         >
           <Ionicons name="close-outline" size={22} color={colors.accentText} />
@@ -257,8 +271,9 @@ const styles = StyleSheet.create({
 
   closeBtn: {
     position: "absolute",
-    top: 18,
-    right: 18,
+    // top/right set inline (insets.top + 12 / 20) so the button clears the
+    // status bar/notch/Dynamic Island and sits in from the corner instead
+    // of a fixed offset that only worked on one device.
     width: 44,
     height: 44,
     borderRadius: 22,
